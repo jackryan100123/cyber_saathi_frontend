@@ -200,42 +200,7 @@ export default function ChatMessage({
       )}
 
       {/* Quick Actions for first bot message */}
-      {showActions && !isUser && (
-        <View style={styles.actionsContainer}>
-          <Text style={[styles.actionsTitle, { color: AppColors.textSecondary }]}>
-            Quick Actions
-          </Text>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, { 
-                backgroundColor: AppColors.success + '15',
-                borderColor: AppColors.success + '30'
-              }]}
-              onPress={() => onAction?.('check')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="shield-checkmark" size={16} color={AppColors.success} />
-              <Text style={[styles.actionButtonText, { color: AppColors.success }]}>
-                URL Safety
-              </Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[styles.actionButton, { 
-                backgroundColor: AppColors.warning + '15',
-                borderColor: AppColors.warning + '30'
-              }]}
-              onPress={() => onAction?.('tips')}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="bulb" size={16} color={AppColors.warning} />
-              <Text style={[styles.actionButtonText, { color: AppColors.warning }]}>
-                Security Tips
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+      
     </View>
   );
 }

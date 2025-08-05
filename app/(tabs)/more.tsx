@@ -346,23 +346,23 @@ export default function MoreScreen() {
                 AI-Powered Protection
               </Text>
             </View>
-            <View style={styles.featureItem}>
+            {/* <View style={styles.featureItem}>
               <Ionicons name="flash" size={16} color={AppColors.warning} />
               <Text style={[styles.featureText, { color: AppColors.textSecondary }]}>
                 Real-time Scanning
               </Text>
-            </View>
-            <View style={styles.featureItem}>
+            </View> */}
+            {/* <View style={styles.featureItem}>
               <Ionicons name="people" size={16} color={AppColors.info} />
               <Text style={[styles.featureText, { color: AppColors.textSecondary }]}>
                 Expert Support
               </Text>
-            </View>
+            </View> */}
           </View>
           
           <Text style={[styles.appInfoCopyright, { color: AppColors.textTertiary }]}>
-            © 2024 Developed by CenCops{'\n'}
-            Chandigarh Police Cybercrime Unit
+            © 2025 Developed by CenCops{'\n'}
+            Chandigarh Police 
           </Text>
         </View>
       </ScrollView>
