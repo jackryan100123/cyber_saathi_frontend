@@ -38,6 +38,17 @@ export default function NewsScreen() {
 
   useEffect(() => {
     fetchNews();
+    
+    // Auto-refresh news every 12 hours to match backend crawling
+    const autoRefreshInterval = setInterval(() => {
+      console.log('🔄 Auto-refreshing news from frontend...');
+      fetchNews();
+    }, 12 * 60 * 60 * 1000); // 12 hours
+    
+    // Cleanup interval on component unmount
+    return () => {
+      clearInterval(autoRefreshInterval);
+    };
   }, []);
 
   const fetchNews = async () => {
@@ -48,6 +59,7 @@ export default function NewsScreen() {
       const response = await api.getNews();
       
       if (response.success) {
+        // Backend returns max 6 articles, frontend displays all received articles
         setNews(response.articles);
       } else {
         setError(response.error || 'Failed to fetch news');

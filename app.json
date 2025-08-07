@@ -18,6 +18,11 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f172a"
       },
+      
+
+
+       "usesCleartextTraffic": true,
+      "networkSecurityConfig": "network_security_config.xml",
       "edgeToEdgeEnabled": true,
       "package": "com.cencops.cybersaathi"
     },
@@ -40,6 +45,18 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "aa8937af-acee-436f-98dc-dca3f6b9c1a7"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/aa8937af-acee-436f-98dc-dca3f6b9c1a7"
     }
   }
 }

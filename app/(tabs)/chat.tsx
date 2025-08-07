@@ -8,6 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -42,7 +43,7 @@ const { width, height } = Dimensions.get('window');
 export default function ChatScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -55,42 +56,65 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const quickActions: QuickAction[] = [
-    { 
-      id: "report", 
-      icon: 'alert-circle' as keyof typeof Ionicons.glyphMap, 
-      label: "Report Crime", 
-      color: AppColors.error, 
-      bgColor: AppColors.error + '15' 
+    {
+      id: "report",
+      icon: 'alert-circle' as keyof typeof Ionicons.glyphMap,
+      label: "Report Crime",
+      color: AppColors.error,
+      bgColor: AppColors.error + '15'
     },
-    
-    { 
-      id: "tips", 
-      icon: 'bulb' as keyof typeof Ionicons.glyphMap, 
-      label: "Security Tips", 
-      color: AppColors.warning, 
-      bgColor: AppColors.warning + '15' 
+
+    {
+      id: "tips",
+      icon: 'bulb' as keyof typeof Ionicons.glyphMap,
+      label: "Security Tips",
+      color: AppColors.warning,
+      bgColor: AppColors.warning + '15'
     },
-    { 
-      id: "help", 
-      icon: 'help-circle' as keyof typeof Ionicons.glyphMap, 
-      label: "Emergency", 
-      color: AppColors.emergency, 
-      bgColor: AppColors.emergency + '15' 
+    {
+      id: "help",
+      icon: 'help-circle' as keyof typeof Ionicons.glyphMap,
+      label: "Emergency",
+      color: AppColors.emergency,
+      bgColor: AppColors.emergency + '15'
     },
   ];
 
   useEffect(() => {
     checkApiConnection();
-    
+
     const timeoutId = setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
 
     return () => clearTimeout(timeoutId);
   }, [messages, isTyping]);
+
+  // Keyboard event listeners for Android
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        // Scroll to bottom when keyboard appears
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      });
+
+      const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+        setKeyboardHeight(0);
+      });
+
+      return () => {
+        keyboardDidShowListener?.remove();
+        keyboardDidHideListener?.remove();
+      };
+    }
+  }, []);
 
   const checkApiConnection = async () => {
     try {
@@ -127,13 +151,13 @@ export default function ChatScreen() {
       setMessages(prev => [...prev, scanningMessage]);
 
       const scanResult = await api.scanUrl(url);
-      
+
       if (scanResult.success && scanResult.result) {
         const result = scanResult.result;
-        
+
         let emoji = "❓";
         let riskDescription = "";
-        
+
         switch (result.riskLevel) {
           case 'dangerous':
             emoji = "🚨";
@@ -166,11 +190,11 @@ export default function ChatScreen() {
 
 ⏱️ **Scan Time**: ${new Date(result.scanTime).toLocaleTimeString()}
 
-${result.riskLevel === "dangerous" 
-    ? "\n🚨 **WARNING**: Do not visit this website! It may contain malware or be used for phishing." 
-    : result.riskLevel === "suspicious" 
-        ? "\n⚠️ **CAUTION**: Be very careful if you choose to visit this website."
-        : "\n✅ **RECOMMENDATION**: While this URL appears safe, always be cautious with personal information."}`;
+${result.riskLevel === "dangerous"
+            ? "\n🚨 **WARNING**: Do not visit this website! It may contain malware or be used for phishing."
+            : result.riskLevel === "suspicious"
+              ? "\n⚠️ **CAUTION**: Be very careful if you choose to visit this website."
+              : "\n✅ **RECOMMENDATION**: While this URL appears safe, always be cautious with personal information."}`;
 
         const resultMessage: Message = {
           id: generateUniqueId(),
@@ -206,7 +230,7 @@ ${result.riskLevel === "dangerous"
     setMessages((prev) => [...prev, userMessage]);
 
     setIsTyping(true);
-    
+
     try {
       const conversationHistory = convertMessagesToApiFormat([...messages, userMessage]);
       const response = await api.sendChatMessage(conversationHistory);
@@ -273,7 +297,7 @@ ${result.riskLevel === "dangerous"
     // Continue with AI API call for other messages
     try {
       const conversationHistory = convertMessagesToApiFormat([...messages, userMessage]);
-      
+
       const messagesForAPI: ApiMessage[] = [
         {
           role: "system" as const,
@@ -327,8 +351,8 @@ ${result.riskLevel === "dangerous"
       'Are you sure you want to clear the chat history?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear', 
+        {
+          text: 'Clear',
           style: 'destructive',
           onPress: () => {
             setMessages([{
@@ -345,175 +369,204 @@ ${result.riskLevel === "dangerous"
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background }]}>
-      <StatusBar 
-        barStyle={isDark ? "light-content" : "dark-content"} 
-        backgroundColor="transparent" 
-        translucent 
-      />
-      
-      {/* Header */}
-      <LinearGradient
-        colors={isDark ? AppColors.gradients.dark as [string, string] : AppColors.gradients.primary as [string, string]}
-        style={styles.header}
-      >
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <View style={styles.botAvatar}>
-              <Ionicons name="shield-checkmark" size={20} color="white" />
-            </View>
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>CyberSaathi</Text>
-              <Text style={styles.headerSubtitle}>
-                {isConnected ? "🟢 Online" : "🔴 Offline"}
-              </Text>
-            </View>
-          </View>
-          
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={handleEmergencyCall}
-            >
-              <Ionicons name="call" size={18} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={handleClearChat}
-            >
-              <Ionicons name="refresh" size={18} color="white" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </LinearGradient>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : StatusBar.currentHeight || 0}
+    >
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background }]}>
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          backgroundColor="transparent"
+          translucent
+        />
 
-      {/* Connection Status */}
-      {!isConnected && (
-        <View style={styles.connectionWarning}>
-          <Ionicons name="warning" size={16} color={AppColors.warning} />
-          <Text style={styles.connectionText}>Limited functionality - Check your connection</Text>
-        </View>
-      )}
-
-      {/* Quick Actions */}
-      <View style={[styles.quickActionsContainer, { 
-        backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
-        borderBottomColor: isDark ? AppColors.card.borderDark : AppColors.card.border 
-      }]}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.quickActionsContent}
+        {/* Header */}
+        <LinearGradient
+          colors={isDark ? AppColors.gradients.dark as [string, string] : AppColors.gradients.primary as [string, string]}
+          style={styles.header}
         >
-          {quickActions.map((action) => (
-            <TouchableOpacity
-              key={action.id}
-              style={[styles.quickActionButton, { 
-                backgroundColor: action.bgColor, 
-                borderColor: action.color + '40' 
-              }]}
-              onPress={() => handleQuickAction(action.id)}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: action.color }]}>
-                <Ionicons name={action.icon} size={16} color="white" />
+          <View style={styles.headerContent}>
+            <View style={styles.headerLeft}>
+              <View style={styles.botAvatar}>
+                <Ionicons name="shield-checkmark" size={20} color="white" />
               </View>
-              <Text style={[styles.quickActionText, { color: action.color }]}>
-                {action.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Messages */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {messages.map((message, index) => (
-          <ChatMessage
-            key={message.id}
-            message={message}
-            onAction={handleQuickAction}
-            showActions={index === 0}
-          />
-        ))}
-        
-        {isTyping && (
-          <View style={styles.typingContainer}>
-            <View style={[styles.typingBubble, { 
-              backgroundColor: isDark ? AppColors.chat.botBubbleDark : AppColors.chat.botBubble,
-              borderColor: isDark ? AppColors.card.borderDark : AppColors.card.border 
-            }]}>
-              <View style={styles.typingIndicator}>
-                <View style={[styles.typingDot, { backgroundColor: AppColors.primary }]} />
-                <View style={[styles.typingDot, { backgroundColor: AppColors.primary }]} />
-                <View style={[styles.typingDot, { backgroundColor: AppColors.primary }]} />
+              <View style={styles.headerText}>
+                <Text style={styles.headerTitle}>CyberSaathi</Text>
+                <Text style={styles.headerSubtitle}>
+                  {isConnected ? "🟢 Online" : "🔴 Offline"}
+                </Text>
               </View>
-              <Text style={[styles.typingText, { color: AppColors.textSecondary }]}>
-                CyberSaathi is typing...
-              </Text>
             </View>
+
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={handleEmergencyCall}
+              >
+                <Ionicons name="call" size={18} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={handleClearChat}
+              >
+                <Ionicons name="refresh" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Connection Status */}
+        {!isConnected && (
+          <View style={styles.connectionWarning}>
+            <Ionicons name="warning" size={16} color={AppColors.warning} />
+            <Text style={styles.connectionText}>
+              Limited functionality - Check your connection
+            </Text>
           </View>
         )}
-      </ScrollView>
 
-      {/* Input */}
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={[styles.inputContainer, { 
-          backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
-          borderTopColor: isDark ? AppColors.card.borderDark : AppColors.card.border 
-        }]}
-      >
-        <View style={[styles.inputWrapper, { 
-          backgroundColor: isDark ? AppColors.chat.inputBackgroundDark : AppColors.chat.inputBackground,
-          borderColor: isDark ? AppColors.chat.inputBorderDark : AppColors.chat.inputBorder 
-        }]}>
-          <TextInput
-            style={[styles.textInput, { 
-              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary 
-            }]}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Ask me"
-            placeholderTextColor={AppColors.textTertiary}
-            multiline
-            maxLength={1000}
-            onSubmitEditing={handleSend}
-            blurOnSubmit={false}
-            returnKeyType="send"
-            autoCapitalize="sentences"
-            autoCorrect={true}
-            spellCheck={true}
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-            onPress={handleSend}
-            disabled={!inputText.trim() || isTyping}
-            activeOpacity={0.8}
+        {/* Quick Actions */}
+        <View style={[
+          styles.quickActionsContainer,
+          {
+            backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
+            borderBottomColor: isDark ? AppColors.card.borderDark : AppColors.card.border
+          }
+        ]}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickActionsContent}
           >
-            <LinearGradient
-              colors={!inputText.trim() ? [AppColors.button.disabled, AppColors.button.disabled] : AppColors.gradients.primary as [string, string]}
-              style={styles.sendGradient}
+            {quickActions.map((action) => (
+              <TouchableOpacity
+                key={action.id}
+                style={[
+                  styles.quickActionButton,
+                  {
+                    backgroundColor: action.bgColor,
+                    borderColor: action.color + "40"
+                  }
+                ]}
+                onPress={() => handleQuickAction(action.id)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.quickActionIcon, { backgroundColor: action.color }]}>
+                  <Ionicons name={action.icon} size={16} color="white" />
+                </View>
+                <Text style={[styles.quickActionText, { color: action.color }]}>
+                  {action.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Messages */}
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {messages.map((message, index) => (
+            <ChatMessage
+              key={message.id}
+              message={message}
+              onAction={handleQuickAction}
+              showActions={index === 0}
+            />
+          ))}
+
+          {isTyping && (
+            <View style={styles.typingContainer}>
+              <View style={[
+                styles.typingBubble,
+                {
+                  backgroundColor: isDark ? AppColors.chat.botBubbleDark : AppColors.chat.botBubble,
+                  borderColor: isDark ? AppColors.card.borderDark : AppColors.card.border
+                }
+              ]}>
+                <View style={styles.typingIndicator}>
+                  <View style={[styles.typingDot, { backgroundColor: AppColors.primary }]} />
+                  <View style={[styles.typingDot, { backgroundColor: AppColors.primary }]} />
+                  <View style={[styles.typingDot, { backgroundColor: AppColors.primary }]} />
+                </View>
+                <Text style={[styles.typingText, { color: AppColors.textSecondary }]}>
+                  CyberSaathi is typing...
+                </Text>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Input */}
+        <View style={[
+          styles.inputContainer,
+          {
+            backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
+            borderTopColor: isDark ? AppColors.card.borderDark : AppColors.card.border
+          }
+        ]}>
+          <View style={[
+            styles.inputWrapper,
+            {
+              backgroundColor: isDark ? AppColors.chat.inputBackgroundDark : AppColors.chat.inputBackground,
+              borderColor: isDark ? AppColors.chat.inputBorderDark : AppColors.chat.inputBorder
+            }
+          ]}>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary
+                }
+              ]}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Ask me"
+              placeholderTextColor={AppColors.textTertiary}
+              multiline
+              maxLength={1000}
+              onSubmitEditing={handleSend}
+              blurOnSubmit={false}
+              returnKeyType="send"
+              autoCapitalize="sentences"
+              autoCorrect
+              spellCheck
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                !inputText.trim() && styles.sendButtonDisabled
+              ]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || isTyping}
+              activeOpacity={0.8}
             >
-              <Ionicons name="send" size={20} color="white" />
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={
+                  !inputText.trim()
+                    ? [AppColors.button.disabled, AppColors.button.disabled]
+                    : AppColors.gradients.primary as [string, string]
+                }
+                style={styles.sendGradient}
+              >
+                <Ionicons name="send" size={20} color="white" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
-        
-        <View style={styles.inputFooter}>
-          <Text style={[styles.inputFooterText, { color: AppColors.textTertiary }]}>
-            Powered by AI • Tap send or press Enter
-          </Text>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
+
+
+
+
+
 }
 
 const styles = StyleSheet.create({
@@ -641,32 +694,32 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     flexGrow: 1,
   },
-  
+
   // Updated Message Styles for Proper Alignment
   messageContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
+    // marginBottom: 10,
     alignItems: 'flex-end',
   },
-  
+
   // Bot messages aligned to left
   botMessageContainer: {
     justifyContent: 'flex-start',
     alignItems: 'flex-end',
   },
-  
+
   // User messages aligned to right
   userMessageContainer: {
     justifyContent: 'flex-end',
     alignItems: 'flex-end',
     flexDirection: 'row-reverse',
   },
-  
+
   avatarContainer: {
     width: 32,
     marginHorizontal: 8,
   },
-  
+
   avatar: {
     width: 32,
     height: 32,
@@ -679,12 +732,12 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  
- 
+
+
   userAvatar: {
     backgroundColor: AppColors.success,
   },
-  
+
   messageBubble: {
     maxWidth: width * 0.75,
     borderRadius: 16,
@@ -695,51 +748,51 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  
+
   // Bot bubble styling
   botBubble: {
     borderBottomLeftRadius: 4,
     marginRight: 60,
     padding: 12,
   },
-  
+
   // User bubble styling  
   userBubble: {
     borderBottomRightRadius: 4,
     marginLeft: 60,
     padding: 12,
   },
-  
+
   messageContent: {
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  
+
   messageText: {
     fontSize: 15,
     lineHeight: 20,
     fontWeight: '400',
   },
-  
+
   messageLineText: {
     fontSize: 15,
     lineHeight: 20,
   },
-  
+
   boldText: {
     fontWeight: '700',
   },
-  
+
   bulletPoint: {
     marginLeft: 8,
   },
-  
+
   timestamp: {
     fontSize: 11,
     fontWeight: '500',
     alignSelf: 'flex-end',
     marginTop: 4,
   },
-  
+
   // Updated typing indicator
   typingContainer: {
     flexDirection: 'row',
@@ -747,7 +800,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     alignItems: 'flex-end',
   },
-  
+
   typingBubble: {
     padding: 12,
     borderRadius: 16,
@@ -762,52 +815,61 @@ const styles = StyleSheet.create({
     marginLeft: 48, // Account for avatar space
     marginRight: 60,
   },
-  
+
   typingIndicator: {
     flexDirection: 'row',
     gap: 6,
     alignItems: 'center',
     marginBottom: 4,
   },
-  
+
   typingDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     opacity: 0.7,
   },
-  
+
   typingText: {
     fontSize: 12,
     fontStyle: 'italic',
   },
-  
+
   inputContainer: {
     borderTopWidth: 1,
     padding: 10,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    marginBottom: Platform.OS === 'ios' ? 40 : 20, // Apply marginBottom on Android too
     shadowColor: AppColors.card.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 8,
-    marginBottom: 40,
+    elevation: 8, // Android shadow
   },
   
+
   inputWrapper: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
     gap: 6,
     borderRadius: 28,
     padding: 2,
     borderWidth: 1,
+    marginBottom: 30,
+  
+    // Shadow for iOS
     shadowColor: AppColors.card.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  
+    // Elevation for Android
     elevation: 3,
+  
+    // Optional: Improve platform consistency
+    backgroundColor: AppColors.chat.inputBackground, // fallback if dynamic background isn't passed in
   },
   
+
   textInput: {
     flex: 1,
     fontSize: 16,
@@ -818,8 +880,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     textAlignVertical: 'top',
     fontWeight: '400',
+
   },
-  
+
   sendButton: {
     width: 44,
     height: 44,
@@ -831,24 +894,24 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-  
+
   sendGradient: {
     width: '100%',
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  
+
   sendButtonDisabled: {
     shadowOpacity: 0,
     elevation: 0,
   },
-  
+
   inputFooter: {
     marginTop: 8,
     alignItems: 'center',
   },
-  
+
   inputFooterText: {
     fontSize: 11,
     fontStyle: 'italic',
