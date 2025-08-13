@@ -158,13 +158,19 @@ export default function ChatMessage({
       styles.container,
       isUser ? styles.userContainer : styles.botContainer
     ]}>
-      {/* Avatar */}
-     
+      {/* Bot Avatar - Removed shield icon */}
+      {!isUser && (
+        <View style={styles.avatarContainer}>
+          <View style={styles.botAvatar}>
+            <Ionicons name="chatbubble" size={16} color={AppColors.primary} />
+          </View>
+        </View>
+      )}
 
       {/* Message Content */}
       <View style={[
         getBubbleStyle(),
-        { maxWidth: width * 0.8 }
+        { maxWidth: Math.min(width * 0.75, 320) }
       ]}>
         {isUser ? (
           <LinearGradient
@@ -194,13 +200,12 @@ export default function ChatMessage({
 
       {/* User Avatar */}
       {isUser && (
-        <View style={[styles.avatar, styles.userAvatar]}>
-          <Ionicons name="person" size={16} color={AppColors.primary} />
+        <View style={styles.avatarContainer}>
+          <View style={styles.userAvatar}>
+            <Ionicons name="person" size={16} color={AppColors.primary} />
+          </View>
         </View>
       )}
-
-      {/* Quick Actions for first bot message */}
-      
     </View>
   );
 }
@@ -210,7 +215,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 16,
     alignItems: 'flex-end',
-    paddingHorizontal: 4,
+    paddingHorizontal: 16,
   },
   userContainer: {
     justifyContent: 'flex-end',
@@ -218,31 +223,38 @@ const styles = StyleSheet.create({
   botContainer: {
     justifyContent: 'flex-start',
   },
-  avatar: {
+  avatarContainer: {
+    width: 36,
+    height: 36,
+    marginHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  botAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    marginHorizontal: 8,
+    backgroundColor: AppColors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: AppColors.card.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: AppColors.primary + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
     shadowColor: AppColors.card.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
-  },
-  avatarGradient: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  userAvatar: {
-    backgroundColor: AppColors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  botAvatar: {
-    overflow: 'hidden',
   },
   messageBubble: {
     borderRadius: 20,
@@ -250,7 +262,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 4,
   },
   userBubble: {
     borderBottomRightRadius: 6,
@@ -265,7 +277,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   messageContent: {
-    marginBottom: 6,
+    marginBottom: 8,
   },
   messageText: {
     fontSize: 15,
@@ -278,15 +290,15 @@ const styles = StyleSheet.create({
   codeText: {
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 13,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   linkContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginVertical: 2,
+    gap: 6,
+    marginVertical: 4,
   },
   linkText: {
     fontSize: 15,
@@ -303,38 +315,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'left',
     fontWeight: '500',
-  },
-  actionsContainer: {
-    marginTop: 12,
-    marginLeft: 52,
-    marginRight: 20,
-  },
-  actionsTitle: {
-    fontSize: 12,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    borderWidth: 1,
-    shadowColor: AppColors.card.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
   },
 });

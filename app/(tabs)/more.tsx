@@ -2,7 +2,7 @@ import { AppColors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Linking,
@@ -17,13 +17,11 @@ import {
   View,
 } from 'react-native';
 
-interface Booklet {
-  id: string;
-  title: string;
-  description: string;
-  fileUrl: string;
-  icon: string;
-  size: string;
+import api, { Booklet as ApiBooklet } from '@/services/api';
+
+interface Booklet extends ApiBooklet {
+  description?: string;
+  icon?: string;
 }
 
 interface ContactInfo {
@@ -39,32 +37,32 @@ export default function MoreScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const booklets: Booklet[] = [
-    {
-      id: '1',
-      title: 'CERT-IN Cyber Awareness Booklet',
-      description: 'Comprehensive guide to cybersecurity awareness and best practices for individuals and organizations',
-      fileUrl: 'https://www.cert-in.org.in/PDF/Cyber_Awareness_Booklet.pdf',
-      icon: 'document-text',
-      size: '2.5 MB',
-    },
-    {
-      id: '2',
-      title: 'Cyber Security Handbook For Women',
-      description: 'Specialized cybersecurity guide focusing on women\'s safety and protection in digital spaces',
-      fileUrl: 'https://cybercrime.gov.in/Webform/cyber_security_women.aspx',
-      icon: 'shield-checkmark',
-      size: '1.8 MB',
-    },
-    {
-      id: '3',
-      title: 'Internet Safety Guidelines',
-      description: 'Essential guidelines for safe internet usage, digital protection, and online privacy',
-      fileUrl: 'https://cybercrime.gov.in/Webform/internet_safety.aspx',
-      icon: 'globe',
-      size: '1.2 MB',
-    },
-  ];
+  const [booklets, setBooklets] = useState<Booklet[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const res = await api.getBooklets();
+        const mapped: Booklet[] = res.booklets.map((b) => ({
+          ...b,
+          // Assign default icons based on name
+          icon: (b.title.toLowerCase().includes('internet') || b.title.toLowerCase().includes('safety')) ? 'globe' :
+                (b.title.toLowerCase().includes('women') || b.title.toLowerCase().includes('mahila')) ? 'shield-checkmark' :
+                'document-text',
+          description: b.title,
+        }));
+        setBooklets(mapped);
+      } catch (e: any) {
+        setError(e.message || 'Failed to load booklets');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const contactInfo: ContactInfo[] = [
     {
@@ -172,6 +170,19 @@ export default function MoreScreen() {
     );
   };
 
+  const openPoliceStationLocation = async () => {
+    const lat = 30.739204757628027;
+    const lng = 76.77835647910382;
+    const label = 'Chandigarh Cyber Police Station';
+    const iosUrl = `http://maps.apple.com/?ll=${lat},${lng}&q=${encodeURIComponent(label)}`;
+    const universalUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+
+    const url = Platform.OS === 'ios' ? iosUrl : universalUrl;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('Error', 'Unable to open maps on this device.');
+    });
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background }]}>
       <StatusBar 
@@ -234,6 +245,22 @@ export default function MoreScreen() {
             Download official guides and enhance your cybersecurity knowledge
           </Text>
           
+          {loading && (
+            <View style={[styles.bookletCard, { 
+              backgroundColor: isDark ? AppColors.card.backgroundDark : AppColors.card.background,
+              borderColor: isDark ? AppColors.card.borderDark : AppColors.card.border 
+            }]}> 
+              <Text style={{ color: AppColors.textSecondary }}>Loading booklets...</Text>
+            </View>
+          )}
+          {!!error && (
+            <View style={[styles.bookletCard, { 
+              backgroundColor: isDark ? AppColors.card.backgroundDark : AppColors.card.background,
+              borderColor: isDark ? AppColors.card.borderDark : AppColors.card.border 
+            }]}> 
+              <Text style={{ color: AppColors.error }}>Failed to load booklets</Text>
+            </View>
+          )}
           {booklets.map((booklet) => (
             <TouchableOpacity
               key={booklet.id}
@@ -249,7 +276,7 @@ export default function MoreScreen() {
                   colors={AppColors.gradients.primary as [string, string]}
                   style={styles.bookletIconGradient}
                 >
-                  <Ionicons name={booklet.icon as any} size={24} color="white" />
+                  <Ionicons name={(booklet.icon || 'document-text') as any} size={24} color="white" />
                 </LinearGradient>
               </View>
               <View style={styles.bookletContent}>
@@ -268,6 +295,42 @@ export default function MoreScreen() {
               </View>
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* Locate Cyber Police Station */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary }]}>
+            Locate Cyber Police Station
+          </Text>
+          <Text style={[styles.sectionSubtitle, { color: AppColors.textSecondary }]}>
+            Chandigarh Cyber Police Station
+          </Text>
+          <TouchableOpacity
+            style={[styles.actionCard, {
+              backgroundColor: isDark ? AppColors.card.backgroundDark : AppColors.card.background,
+              borderColor: isDark ? AppColors.card.borderDark : AppColors.card.border
+            }]}
+            onPress={openPoliceStationLocation}
+            activeOpacity={0.8}
+          >
+            <View style={styles.actionIcon}>
+              <LinearGradient
+                colors={AppColors.gradients.secondary as [string, string]}
+                style={styles.actionIconGradient}
+              >
+                <Ionicons name="location" size={22} color="white" />
+              </LinearGradient>
+            </View>
+            <View style={styles.actionContent}>
+              <Text style={[styles.actionTitle, { color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary }]}>
+                Open in Maps
+              </Text>
+              <Text style={[styles.actionDescription, { color: AppColors.textSecondary }]}>
+                30.739204757628027, 76.77835647910382
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={AppColors.textTertiary} />
+          </TouchableOpacity>
         </View>
 
         {/* Contact Section */}

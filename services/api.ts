@@ -51,6 +51,21 @@ export interface NewsResponse {
   error?: string;
 }
 
+// Booklets
+export interface Booklet {
+  id: string;
+  title: string;
+  filename?: string;
+  fileUrl: string;
+  size: string;
+}
+
+export interface BookletsResponse {
+  success: boolean;
+  booklets: Booklet[];
+  error?: string;
+}
+
 export interface UrlScanResult {
   url: string;
   status: string;
@@ -214,6 +229,26 @@ export const api = {
       return data;
     } catch (error) {
       console.error('News fetch failed:', error);
+      throw handleApiError(error);
+    }
+  },
+
+  // Get booklets list
+  async getBooklets(): Promise<BookletsResponse> {
+    try {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/booklets`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new ApiError(errorData.error || 'Failed to get booklets from backend', response.status);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
       throw handleApiError(error);
     }
   },
