@@ -18,13 +18,14 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f172a"
       },
-      
 
 
-       "usesCleartextTraffic": true,
+      "usesCleartextTraffic": true,
       "networkSecurityConfig": "network_security_config.xml",
       "edgeToEdgeEnabled": true,
-      "package": "com.cencops.cybersaathi"
+      "package": "com.cencops.cybersaathi",
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": ["RECORD_AUDIO"]
     },
     "web": {
       "bundler": "metro",
