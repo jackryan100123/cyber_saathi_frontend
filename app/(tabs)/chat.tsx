@@ -2,7 +2,7 @@ import ChatMessage from '@/components/ChatMessage';
 import { AppColors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import api, { Message as ApiMessage, formatUrlForScan, isUrlScanRequest } from '@/services/api';
-import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -21,6 +21,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 interface Message {
   id: string;
@@ -30,19 +32,13 @@ interface Message {
   type?: 'text' | 'url-scan' | 'emergency' | 'info';
 }
 
-interface QuickAction {
-  id: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  color: string;
-  bgColor: string;
-}
-
 const { width, height } = Dimensions.get('window');
 
 export default function ChatScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -56,33 +52,11 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(56);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
-
-  const quickActions: QuickAction[] = [
-    {
-      id: "report",
-      icon: 'alert-circle' as keyof typeof Ionicons.glyphMap,
-      label: "Report Crime",
-      color: AppColors.error,
-      bgColor: AppColors.error + '15'
-    },
-
-    {
-      id: "tips",
-      icon: 'bulb' as keyof typeof Ionicons.glyphMap,
-      label: "Security Tips",
-      color: AppColors.warning,
-      bgColor: AppColors.warning + '15'
-    },
-    {
-      id: "help",
-      icon: 'help-circle' as keyof typeof Ionicons.glyphMap,
-      label: "Emergency",
-      color: AppColors.emergency,
-      bgColor: AppColors.emergency + '15'
-    },
-  ];
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   useEffect(() => {
     checkApiConnection();
@@ -94,26 +68,16 @@ export default function ChatScreen() {
     return () => clearTimeout(timeoutId);
   }, [messages, isTyping]);
 
-  // Keyboard event listeners for Android
+  // Track keyboard visibility (platform-specific) to adjust bottom offset
   useEffect(() => {
-    if (Platform.OS === 'android') {
-      const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
-        // Scroll to bottom when keyboard appears
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      });
-
-      const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
-        setKeyboardHeight(0);
-      });
-
-      return () => {
-        keyboardDidShowListener?.remove();
-        keyboardDidHideListener?.remove();
-      };
-    }
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
+    const hide = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, []);
 
   const checkApiConnection = async () => {
@@ -220,43 +184,54 @@ ${result.riskLevel === "dangerous"
     }
   };
 
-  const handleQuickAction = async (action: string) => {
-    const userMessage: Message = {
-      id: generateUniqueId(),
-      content: action,
-      sender: 'user',
-      timestamp: new Date()
-    };
-    setMessages((prev) => [...prev, userMessage]);
+  const startRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant microphone permission to use voice input.');
+        return;
+      }
 
-    setIsTyping(true);
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await recording.startAsync();
+      
+      recordingRef.current = recording;
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      Alert.alert('Recording Error', 'Failed to start voice recording. Please try again.');
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recordingRef.current) return;
 
     try {
-      const conversationHistory = convertMessagesToApiFormat([...messages, userMessage]);
-      const response = await api.sendChatMessage(conversationHistory);
+      setIsRecording(false);
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      recordingRef.current = null;
 
-      if (response.success) {
-        const botMessage: Message = {
-          id: generateUniqueId(),
-          content: response.response,
-          sender: "bot",
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, botMessage]);
-      } else {
-        throw new Error(response.error || "Failed to get response");
+      if (uri) {
+        const transcriptionResult = await api.transcribeAudio(uri);
+        if (transcriptionResult.success && transcriptionResult.text) {
+          const newText = transcriptionResult.text.trim();
+          if (newText) {
+            setInputText(prev => prev ? `${prev} ${newText}` : newText);
+          }
+        } else {
+          Alert.alert('Transcription Error', transcriptionResult.error || 'Failed to transcribe audio');
+        }
       }
-    } catch (error: any) {
-      console.error("Quick Action Error:", error);
-      const errorMessage: Message = {
-        id: generateUniqueId(),
-        content: "⚠️ I'm having trouble responding right now. Please try again in a moment.",
-        sender: "bot",
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsTyping(false);
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
+      Alert.alert('Recording Error', 'Failed to process voice recording. Please try again.');
     }
   };
 
@@ -369,99 +344,63 @@ ${result.riskLevel === "dangerous"
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : StatusBar.currentHeight || 0}
-    >
-      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background }]}>
-        <StatusBar
-          barStyle={isDark ? "light-content" : "dark-content"}
-          backgroundColor="transparent"
-          translucent
-        />
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background }]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent
+      />
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
         {/* Header */}
-        <LinearGradient
-          colors={isDark ? AppColors.gradients.dark as [string, string] : AppColors.gradients.primary as [string, string]}
+        <View 
           style={styles.header}
+          onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
         >
-          <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <View style={styles.botAvatar}>
-                <Ionicons name="shield-checkmark" size={20} color="white" />
+          <LinearGradient
+            colors={isDark ? AppColors.gradients.dark as [string, string] : AppColors.gradients.primary as [string, string]}
+            style={styles.headerGradient}
+          >
+            <View style={styles.headerContent}>
+              <View style={styles.headerLeft}>
+                <View style={styles.headerText}>
+                  <Text style={styles.headerTitle}>CyberSaathi</Text>
+                  <Text style={styles.headerSubtitle}>
+                    {isConnected ? "🟢 Online" : "🔴 Offline"}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.headerText}>
-                <Text style={styles.headerTitle}>CyberSaathi</Text>
-                <Text style={styles.headerSubtitle}>
-                  {isConnected ? "🟢 Online" : "🔴 Offline"}
-                </Text>
-              </View>
-            </View>
 
-            <View style={styles.headerRight}>
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={handleEmergencyCall}
-              >
-                <Ionicons name="call" size={18} color="white" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={handleClearChat}
-              >
-                <Ionicons name="refresh" size={18} color="white" />
-              </TouchableOpacity>
+              <View style={styles.headerRight}>
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={handleEmergencyCall}
+                >
+                  <Text style={styles.headerButtonText}>1930</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.headerButton}
+                  onPress={handleClearChat}
+                >
+                  <Text style={styles.headerButtonText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </LinearGradient>
+          </LinearGradient>
+        </View>
 
         {/* Connection Status */}
         {!isConnected && (
           <View style={styles.connectionWarning}>
-            <Ionicons name="warning" size={16} color={AppColors.warning} />
             <Text style={styles.connectionText}>
-              Limited functionality - Check your connection
+              ⚠️ Limited functionality - Check your connection
             </Text>
           </View>
         )}
-
-        {/* Quick Actions */}
-        <View style={[
-          styles.quickActionsContainer,
-          {
-            backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
-            borderBottomColor: isDark ? AppColors.card.borderDark : AppColors.card.border
-          }
-        ]}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickActionsContent}
-          >
-            {quickActions.map((action) => (
-              <TouchableOpacity
-                key={action.id}
-                style={[
-                  styles.quickActionButton,
-                  {
-                    backgroundColor: action.bgColor,
-                    borderColor: action.color + "40"
-                  }
-                ]}
-                onPress={() => handleQuickAction(action.id)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickActionIcon, { backgroundColor: action.color }]}>
-                  <Ionicons name={action.icon} size={16} color="white" />
-                </View>
-                <Text style={[styles.quickActionText, { color: action.color }]}>
-                  {action.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
 
         {/* Messages */}
         <ScrollView
@@ -471,12 +410,10 @@ ${result.riskLevel === "dangerous"
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {messages.map((message, index) => (
+          {messages.map((message) => (
             <ChatMessage
               key={message.id}
               message={message}
-              onAction={handleQuickAction}
-              showActions={index === 0}
             />
           ))}
 
@@ -504,140 +441,141 @@ ${result.riskLevel === "dangerous"
 
         {/* Input */}
         <View style={[
-          styles.inputContainer,
-          {
-            backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
-            borderTopColor: isDark ? AppColors.card.borderDark : AppColors.card.border
-          }
-        ]}>
-          <View style={[
-            styles.inputWrapper,
-            {
-              backgroundColor: isDark ? AppColors.chat.inputBackgroundDark : AppColors.chat.inputBackground,
-              borderColor: isDark ? AppColors.chat.inputBorderDark : AppColors.chat.inputBorder
-            }
-          ]}>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary
-                }
-              ]}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Ask me"
-              placeholderTextColor={AppColors.textTertiary}
-              multiline
-              maxLength={1000}
-              onSubmitEditing={handleSend}
-              blurOnSubmit={false}
-              returnKeyType="send"
-              autoCapitalize="sentences"
-              autoCorrect
-              spellCheck
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                !inputText.trim() && styles.sendButtonDisabled
-              ]}
-              onPress={handleSend}
-              disabled={!inputText.trim() || isTyping}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={
-                  !inputText.trim()
-                    ? [AppColors.button.disabled, AppColors.button.disabled]
-                    : AppColors.gradients.primary as [string, string]
-                }
-                style={styles.sendGradient}
-              >
-                <Ionicons name="send" size={20} color="white" />
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    </KeyboardAvoidingView>
+  styles.inputContainer,
+  {
+    backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
+    borderTopColor: isDark ? AppColors.card.borderDark : AppColors.card.border,
+    // Keep a small fixed inner padding; avoid double-counting safe area as tab bar already includes it
+    paddingBottom: 8,
+    // Reserve only the visible tab bar height above safe area to sit flush with its top edge
+    marginBottom: isKeyboardVisible ? 0 : Math.max(tabBarHeight - insets.bottom, 0),
+  }
+]}>
+  <TextInput
+    style={[
+      styles.textInput,
+      {
+        backgroundColor: isDark ? AppColors.chat.inputBackgroundDark : AppColors.chat.inputBackground,
+        borderColor: isDark ? AppColors.chat.inputBorderDark : AppColors.chat.inputBorder,
+        color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary
+      }
+    ]}
+    value={inputText}
+    onChangeText={setInputText}
+    placeholder={isRecording ? 'Listening… speak now' : 'Ask me'}
+    placeholderTextColor={AppColors.textTertiary}
+    multiline
+    maxLength={1000}
+    onSubmitEditing={handleSend}
+    blurOnSubmit={false}
+    returnKeyType="send"
+    autoCapitalize="sentences"
+    autoCorrect
+    spellCheck
+  />
+
+  {/* Voice Input Button */}
+  <TouchableOpacity
+    style={[
+      styles.micButton,
+      { backgroundColor: isRecording ? AppColors.error : AppColors.textTertiary }
+    ]}
+    onPressIn={startRecording}
+    onPressOut={stopRecording}
+    activeOpacity={0.8}
+  >
+    <View style={styles.micIndicator} />
+  </TouchableOpacity>
+
+  <TouchableOpacity
+    style={[
+      styles.sendButton,
+      !inputText.trim() && styles.sendButtonDisabled
+    ]}
+    onPress={handleSend}
+    disabled={!inputText.trim() || isTyping}
+    activeOpacity={0.8}
+  >
+    <LinearGradient
+      colors={
+        !inputText.trim()
+          ? [AppColors.button.disabled, AppColors.button.disabled]
+          : AppColors.gradients.primary as [string, string]
+      }
+      style={styles.sendGradient}
+    >
+      <Text style={styles.sendText}>Send</Text>
+    </LinearGradient>
+  </TouchableOpacity>
+</View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
-
-
-
-
-
 }
 
 const styles = StyleSheet.create({
+
+  
   container: {
     flex: 1,
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight || 0,
-    paddingBottom: 8,
-    paddingHorizontal: 10,
     shadowColor: AppColors.card.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 8,
   },
+  headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 0 : StatusBar.currentHeight || 0,
+    paddingBottom: 8,
+    paddingHorizontal: 20,
+  },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: 56,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  botAvatar: {
-    width: 50,
-    height: 30,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    // marginRight: 8,
-    marginLeft: 8,
-  },
   headerText: {
     flex: 1,
-    marginLeft: 8,
   },
   headerTitle: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '700',
     color: 'white',
     letterSpacing: 0.5,
   },
   headerSubtitle: {
-    fontSize: 10,
+    fontSize: 12,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
     marginTop: 1,
   },
   headerRight: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 8,
   },
   headerButton: {
-    width: 35,
-    height: 35,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  },
+  headerButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   connectionWarning: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: AppColors.warning + '20',
     paddingHorizontal: 20,
     paddingVertical: 12,
-    gap: 8,
     borderBottomWidth: 1,
     borderBottomColor: AppColors.warning + '30',
   },
@@ -645,64 +583,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: AppColors.warning,
     fontWeight: '600',
-  },
-  quickActionsContainer: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    shadowColor: AppColors.card.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  quickActionsContent: {
-    paddingHorizontal: 10,
-    gap: 10,
-  },
-  quickActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    gap: 8,
-    minWidth: 120,
-    shadowColor: AppColors.card.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  quickActionIcon: {
-    width: 15,
-    height: 15,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickActionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    textAlign: 'center',
   },
   messagesContainer: {
     flex: 1,
-    paddingHorizontal: 16,
   },
   messagesContent: {
     paddingVertical: 20,
-    flexGrow: 1,
+    paddingBottom: 12,
   },
-
-  // Updated typing indicator
   typingContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
     marginBottom: 16,
-    alignItems: 'flex-end',
+    paddingHorizontal: 16,
   },
-
   typingBubble: {
     padding: 12,
     borderRadius: 16,
@@ -714,81 +609,64 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
     maxWidth: width * 0.75,
-    marginLeft: 48, // Account for avatar space
-    marginRight: 60,
   },
-
   typingIndicator: {
     flexDirection: 'row',
     gap: 6,
     alignItems: 'center',
     marginBottom: 4,
   },
-
   typingDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     opacity: 0.7,
   },
-
   typingText: {
     fontSize: 12,
     fontStyle: 'italic',
   },
-
   inputContainer: {
+    flexDirection: 'row', // Align children horizontally
+    alignItems: 'flex-end', // Align children to the bottom
     borderTopWidth: 1,
-    padding: 10,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
-    marginBottom: Platform.OS === 'ios' ? 40 : 20, // Apply marginBottom on Android too
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
     shadowColor: AppColors.card.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 8, // Android shadow
+    elevation: 8,
   },
-  
-
-  inputWrapper: {
-    flexDirection: 'row',
-    gap: 6,
-    borderRadius: 28,
-    padding: 2,
-    borderWidth: 1,
-    marginBottom: 30,
-  
-    // Shadow for iOS
-    shadowColor: AppColors.card.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  
-    // Elevation for Android
-    elevation: 3,
-  
-    // Optional: Improve platform consistency
-    backgroundColor: AppColors.chat.inputBackground, // fallback if dynamic background isn't passed in
-  },
-  
-
   textInput: {
-    flex: 1,
+    flex: 1, // Allows the TextInput to expand and take available space
     fontSize: 16,
     lineHeight: 22,
     maxHeight: 120,
-    minHeight: 44,
+    minHeight: 40,
+    borderRadius: 24, // Adds rounded corners to the input field
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     textAlignVertical: 'top',
     fontWeight: '400',
-
+    borderWidth: 1,
   },
-
+  micButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  micIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'white',
+  },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    borderRadius: 20,
     overflow: 'hidden',
     shadowColor: AppColors.primary,
     shadowOffset: { width: 0, height: 2 },
@@ -796,27 +674,21 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
-
   sendGradient: {
-    width: '100%',
-    height: '100%',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    minWidth: 60,
+    height: 40,
   },
-
+  sendText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   sendButtonDisabled: {
     shadowOpacity: 0,
     elevation: 0,
-  },
-
-  inputFooter: {
-    marginTop: 8,
-    alignItems: 'center',
-  },
-
-  inputFooterText: {
-    fontSize: 11,
-    fontStyle: 'italic',
-    textAlign: 'center',
   },
 });

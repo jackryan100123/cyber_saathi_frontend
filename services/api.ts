@@ -281,6 +281,42 @@ export const api = {
       throw handleApiError(error);
     }
   },
+
+  // Transcribe audio (voice to text)
+  async transcribeAudio(fileUri: string): Promise<{ success: boolean; text?: string; error?: string }> {
+    try {
+      // Temporary stub if backend isn't ready
+      // Comment out the next 3 lines when /transcribe is implemented on backend
+      // return { success: true, text: 'Transcribed sample text' };
+
+      const form = new FormData();
+      // @ts-ignore - React Native FormData file type
+      form.append('audio', {
+        uri: fileUri,
+        name: 'audio.m4a',
+        type: 'audio/m4a',
+      });
+
+      const response = await fetchWithTimeout(`${API_BASE_URL}/transcribe`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          // Let fetch set the multipart boundary automatically
+        },
+        body: form as unknown as BodyInit,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return { success: false, error: errorData.error || 'Failed to transcribe audio' };
+      }
+      const data = await response.json();
+      return { success: !!data.success, text: data.text, error: data.error };
+    } catch (error: any) {
+      const apiError = handleApiError(error);
+      return { success: false, error: apiError.message };
+    }
+  },
 };
 
 // Utility functions

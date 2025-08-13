@@ -1,6 +1,5 @@
 import { AppColors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Dimensions,
@@ -83,11 +82,6 @@ export default function ChatMessage({
             <Text style={[styles.linkText, { color: isUser ? 'rgba(255,255,255,0.9)' : AppColors.primary }]}>
               {linkText}
             </Text>
-            <Ionicons 
-              name="open-outline" 
-              size={12} 
-              color={isUser ? 'rgba(255,255,255,0.9)' : AppColors.primary} 
-            />
           </TouchableOpacity>
         );
       }
@@ -158,15 +152,6 @@ export default function ChatMessage({
       styles.container,
       isUser ? styles.userContainer : styles.botContainer
     ]}>
-      {/* Bot Avatar - Removed shield icon */}
-      {!isUser && (
-        <View style={styles.avatarContainer}>
-          <View style={styles.botAvatar}>
-            <Ionicons name="chatbubble" size={16} color={AppColors.primary} />
-          </View>
-        </View>
-      )}
-
       {/* Message Content */}
       <View style={[
         getBubbleStyle(),
@@ -197,15 +182,6 @@ export default function ChatMessage({
           </>
         )}
       </View>
-
-      {/* User Avatar */}
-      {isUser && (
-        <View style={styles.avatarContainer}>
-          <View style={styles.userAvatar}>
-            <Ionicons name="person" size={16} color={AppColors.primary} />
-          </View>
-        </View>
-      )}
     </View>
   );
 }
@@ -222,39 +198,6 @@ const styles = StyleSheet.create({
   },
   botContainer: {
     justifyContent: 'flex-start',
-  },
-  avatarContainer: {
-    width: 36,
-    height: 36,
-    marginHorizontal: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  botAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: AppColors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: AppColors.card.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  userAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: AppColors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: AppColors.card.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   messageBubble: {
     borderRadius: 20,

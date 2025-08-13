@@ -90,8 +90,8 @@ export default function TabLayout() {
           minHeight: Platform.select({ ios: 48, android: 48 }),
         },
         
-        // Hide tab bar on keyboard (Android)
-        tabBarHideOnKeyboard: Platform.OS === 'android',
+        // Hide tab bar on keyboard for all platforms
+        tabBarHideOnKeyboard: true,
       }}>
       <Tabs.Screen
         name="index"

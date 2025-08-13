@@ -18,10 +18,8 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f172a"
       },
-      
-
-
-       "usesCleartextTraffic": true,
+      "softwareKeyboardLayoutMode": "resize",
+      "usesCleartextTraffic": true,
       "networkSecurityConfig": "network_security_config.xml",
       "edgeToEdgeEnabled": true,
       "package": "com.cencops.cybersaathi"
