@@ -11,7 +11,10 @@
     "description": "Your AI-powered cybersecurity companion. Stay safe, stay secure.",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cencops.cybersaathi"
+      "bundleIdentifier": "com.cencops.cybersaathi",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "This app uses the microphone for speech recognition to help you interact with the chatbot."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +25,10 @@
       "usesCleartextTraffic": true,
       "networkSecurityConfig": "network_security_config.xml",
       "edgeToEdgeEnabled": true,
-      "package": "com.cencops.cybersaathi"
+      "package": "com.cencops.cybersaathi",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",

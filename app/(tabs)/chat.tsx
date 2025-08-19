@@ -8,7 +8,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Dimensions,
-  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -22,7 +21,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 
 interface Message {
   id: string;
@@ -38,7 +36,6 @@ export default function ChatScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
-  const tabBarHeight = useBottomTabBarHeight();
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -54,7 +51,7 @@ export default function ChatScreen() {
   const [isConnected, setIsConnected] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(56);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isPreparingRecording, setIsPreparingRecording] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
 
@@ -67,18 +64,6 @@ export default function ChatScreen() {
 
     return () => clearTimeout(timeoutId);
   }, [messages, isTyping]);
-
-  // Track keyboard visibility (platform-specific) to adjust bottom offset
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvent, () => setIsKeyboardVisible(true));
-    const hide = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
 
   const checkApiConnection = async () => {
     try {
@@ -185,9 +170,13 @@ ${result.riskLevel === "dangerous"
   };
 
   const startRecording = async () => {
+    // Prevent multiple prepare/start calls
+    if (isPreparingRecording || isRecording || recordingRef.current) return;
+    setIsPreparingRecording(true);
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
+        setIsPreparingRecording(false);
         Alert.alert('Permission Required', 'Please grant microphone permission to use voice input.');
         return;
       }
@@ -197,26 +186,28 @@ ${result.riskLevel === "dangerous"
         playsInSilentModeIOS: true,
       });
 
+      // Create and start a single recording instance
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await recording.startAsync();
-      
+
       recordingRef.current = recording;
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
       Alert.alert('Recording Error', 'Failed to start voice recording. Please try again.');
+    } finally {
+      setIsPreparingRecording(false);
     }
   };
 
   const stopRecording = async () => {
     if (!recordingRef.current) return;
-
     try {
-      setIsRecording(false);
       await recordingRef.current.stopAndUnloadAsync();
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
+      setIsRecording(false);
 
       if (uri) {
         const transcriptionResult = await api.transcribeAudio(uri);
@@ -353,8 +344,8 @@ ${result.riskLevel === "dangerous"
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={insets.top + headerHeight}
       >
         {/* Header */}
         <View 
@@ -441,81 +432,82 @@ ${result.riskLevel === "dangerous"
 
         {/* Input */}
         <View style={[
-  styles.inputContainer,
-  {
-    backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
-    borderTopColor: isDark ? AppColors.card.borderDark : AppColors.card.border,
-    // Keep a small fixed inner padding; avoid double-counting safe area as tab bar already includes it
-    paddingBottom: 8,
-    // Reserve only the visible tab bar height above safe area to sit flush with its top edge
-    marginBottom: isKeyboardVisible ? 0 : Math.max(tabBarHeight - insets.bottom, 0),
-  }
-]}>
-  <TextInput
-    style={[
-      styles.textInput,
-      {
-        backgroundColor: isDark ? AppColors.chat.inputBackgroundDark : AppColors.chat.inputBackground,
-        borderColor: isDark ? AppColors.chat.inputBorderDark : AppColors.chat.inputBorder,
-        color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary
-      }
-    ]}
-    value={inputText}
-    onChangeText={setInputText}
-    placeholder={isRecording ? 'Listening… speak now' : 'Ask me'}
-    placeholderTextColor={AppColors.textTertiary}
-    multiline
-    maxLength={1000}
-    onSubmitEditing={handleSend}
-    blurOnSubmit={false}
-    returnKeyType="send"
-    autoCapitalize="sentences"
-    autoCorrect
-    spellCheck
-  />
+          styles.inputContainer,
+          {
+            backgroundColor: isDark ? AppColors.surfaceDark : AppColors.surface,
+            borderTopColor: isDark ? AppColors.card.borderDark : AppColors.card.border,
+            paddingBottom: Platform.OS === 'ios' ? insets.bottom : 16,
+          }
+        ]}>
+          <View style={[
+            styles.inputWrapper,
+            {
+              backgroundColor: isDark ? AppColors.chat.inputBackgroundDark : AppColors.chat.inputBackground,
+              borderColor: isDark ? AppColors.chat.inputBorderDark : AppColors.chat.inputBorder
+            }
+          ]}>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimary
+                }
+              ]}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder={isRecording ? 'Listening… speak now' : 'Ask me'}
+              placeholderTextColor={AppColors.textTertiary}
+              multiline
+              maxLength={1000}
+              onSubmitEditing={handleSend}
+              blurOnSubmit={false}
+              returnKeyType="send"
+              autoCapitalize="sentences"
+              autoCorrect
+              spellCheck
+            />
+            
+            {/* Voice Input Button */}
+            <TouchableOpacity
+              style={[
+                styles.micButton,
+                { backgroundColor: isRecording ? AppColors.error : AppColors.textTertiary }
+              ]}
+              onPressIn={startRecording}
+              onPressOut={stopRecording}
+              activeOpacity={0.8}
+            >
+              <View style={styles.micIndicator} />
+            </TouchableOpacity>
 
-  {/* Voice Input Button */}
-  <TouchableOpacity
-    style={[
-      styles.micButton,
-      { backgroundColor: isRecording ? AppColors.error : AppColors.textTertiary }
-    ]}
-    onPressIn={startRecording}
-    onPressOut={stopRecording}
-    activeOpacity={0.8}
-  >
-    <View style={styles.micIndicator} />
-  </TouchableOpacity>
-
-  <TouchableOpacity
-    style={[
-      styles.sendButton,
-      !inputText.trim() && styles.sendButtonDisabled
-    ]}
-    onPress={handleSend}
-    disabled={!inputText.trim() || isTyping}
-    activeOpacity={0.8}
-  >
-    <LinearGradient
-      colors={
-        !inputText.trim()
-          ? [AppColors.button.disabled, AppColors.button.disabled]
-          : AppColors.gradients.primary as [string, string]
-      }
-      style={styles.sendGradient}
-    >
-      <Text style={styles.sendText}>Send</Text>
-    </LinearGradient>
-  </TouchableOpacity>
-</View>
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                !inputText.trim() && styles.sendButtonDisabled
+              ]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || isTyping}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={
+                  !inputText.trim()
+                    ? [AppColors.button.disabled, AppColors.button.disabled]
+                    : AppColors.gradients.primary as [string, string]
+                }
+                style={styles.sendGradient}
+              >
+                <Text style={styles.sendText}>Send</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-
-  
   container: {
     flex: 1,
   },
@@ -627,30 +619,37 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   inputContainer: {
-    flexDirection: 'row', // Align children horizontally
-    alignItems: 'flex-end', // Align children to the bottom
     borderTopWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+    padding: 16,
     shadowColor: AppColors.card.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
   },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    borderRadius: 24,
+    padding: 4,
+    borderWidth: 1,
+    shadowColor: AppColors.card.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   textInput: {
-    flex: 1, // Allows the TextInput to expand and take available space
+    flex: 1,
     fontSize: 16,
     lineHeight: 22,
     maxHeight: 120,
     minHeight: 40,
-    borderRadius: 24, // Adds rounded corners to the input field
     paddingHorizontal: 16,
     paddingVertical: 10,
     textAlignVertical: 'top',
     fontWeight: '400',
-    borderWidth: 1,
   },
   micButton: {
     width: 40,
@@ -658,6 +657,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 2,
   },
   micIndicator: {
     width: 12,
@@ -673,6 +673,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 4,
+    marginBottom: 2,
   },
   sendGradient: {
     paddingHorizontal: 16,
@@ -680,7 +681,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     minWidth: 60,
-    height: 40,
   },
   sendText: {
     color: 'white',
